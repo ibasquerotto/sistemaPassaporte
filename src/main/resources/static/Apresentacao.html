@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Review: Sistema Passaporte</title>
+
+    <!-- Fontes Distintas e Modernas -->
+    <link href="https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800,900&f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+
+    <style>
+        /* ===========================================
+           CSS CUSTOM PROPERTIES (THEME: SWISS EDITORIAL)
+           =========================================== */
+        :root {
+            --bg-primary: #f8f8f6;
+            --bg-secondary: #ffffff;
+            --bg-dark: #1a1a1a;
+
+            --text-primary: #111111;
+            --text-secondary: #555555;
+            --text-light: #f8f8f6;
+
+            --accent: #d94a38;
+            --accent-alt: #2a5a52;
+            --border-color: rgba(0, 0, 0, 0.08);
+            --border-strong: rgba(0, 0, 0, 0.2);
+
+            --font-display: 'Cabinet Grotesk', sans-serif;
+            --font-body: 'Satoshi', sans-serif;
+
+            --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+            --duration-normal: 0.8s;
+        }
+
+        /* ===========================================
+           VIEWPORT FITTING & BASE STYLES
+           =========================================== */
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            -webkit-font-smoothing: antialiased;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+
+        .slide {
+            width: 100vw;
+            height: 100vh;
+            height: 100dvh;
+            overflow: hidden;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .slide-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            max-height: 100%;
+            overflow: hidden;
+            padding: var(--slide-padding);
+            position: relative;
+            z-index: 2;
+        }
+
+        /* Fluid Typography & Spacing */
+        :root {
+            --title-size: clamp(2rem, 5vw, 4rem);
+            --h2-size: clamp(1.5rem, 3.5vw, 3rem);
+            --h3-size: clamp(1.1rem, 2vw, 1.5rem);
+            --body-size: clamp(0.9rem, 1.2vw, 1.1rem);
+            --small-size: clamp(0.75rem, 1vw, 0.9rem);
+
+            --slide-padding: clamp(1.5rem, 4vw, 4rem);
+            --content-gap: clamp(1rem, 2.5vw, 2rem);
+            --element-gap: clamp(0.5rem, 1.5vw, 1rem);
+        }
+
+        .container {
+            max-width: min(92vw, 1200px);
+            max-height: min(90vh, 800px);
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: var(--font-display);
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            margin: 0;
+        }
+
+        p { margin: 0; line-height: 1.5; }
+
+        .text-accent { color: var(--accent); }
+        .text-alt { color: var(--accent-alt); }
+
+        /* Background Effects */
+        .grid-lines {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-image:
+                    linear-gradient(var(--border-color) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--border-color) 1px, transparent 1px);
+            background-size: clamp(50px, 8vw, 80px) clamp(50px, 8vw, 80px);
+            opacity: 0.5;
+            z-index: 1;
+        }
+
+        /* Layout Grids */
+        .split-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--content-gap);
+            height: 100%;
+            align-items: center;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            gap: var(--element-gap);
+        }
+
+        /* UI Components */
+        .story-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: var(--bg-dark);
+            color: var(--text-light);
+            font-size: var(--small-size);
+            font-weight: 700;
+            font-family: var(--font-body);
+            border-radius: 4px;
+            margin: 0 4px 8px 0;
+        }
+        .story-tag.rh { background: var(--accent); }
+        .story-tag.cd { background: var(--accent-alt); }
+
+        .clean-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: clamp(1.2rem, 2.5vw, 2rem);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: var(--element-gap);
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .bullet-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .bullet-list li {
+            position: relative;
+            padding-left: 20px;
+            font-size: var(--body-size);
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .bullet-list li::before {
+            content: '•';
+            color: var(--accent);
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+        }
+
+        .code-block {
+            background: var(--bg-dark);
+            color: var(--text-light);
+            padding: 1rem;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: var(--small-size);
+            line-height: 1.4;
+            overflow-x: auto;
+            border-left: 4px solid var(--accent);
+            margin: 0;
+        }
+
+        /* Navigation */
+        .nav-dots {
+            position: fixed;
+            right: 1.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 100;
+        }
+        .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--border-strong);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .dot.active {
+            background: var(--accent);
+            transform: scale(2);
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0; left: 0;
+            height: 4px;
+            background: var(--accent);
+            width: 0%;
+            z-index: 100;
+            transition: width 0.3s ease;
+        }
+
+        /* ===========================================
+           ANIMATIONS
+           =========================================== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity var(--duration-normal) var(--ease-out-expo),
+            transform var(--duration-normal) var(--ease-out-expo);
+        }
+        .slide.visible .reveal {
+            opacity: 1;
+            transform: translate(0);
+        }
+        .d-1 { transition-delay: 0.1s; }
+        .d-2 { transition-delay: 0.2s; }
+        .d-3 { transition-delay: 0.3s; }
+        .d-4 { transition-delay: 0.4s; }
+
+        @media (max-width: 900px) {
+            .split-layout { grid-template-columns: 1fr; }
+        }
+        @media (max-height: 650px) {
+            .nav-dots { display: none; }
+        }
+    </style>
+</head>
+<body>
+<div class="progress-bar" id="progressBar"></div>
+<nav class="nav-dots" id="navDots"></nav>
+
+<!-- 01: TITLE -->
+<section class="slide">
+    <div class="grid-lines"></div>
+    <div class="slide-content container" style="align-items: center; text-align: center;">
+        <div class="story-tag adm reveal">Product Architecture Review</div>
+        <h1 class="reveal d-1" style="font-size: var(--title-size); margin-bottom: var(--element-gap);">
+            Arquitetura:<br><span class="text-accent">Sistema Passaporte</span>
+        </h1>
+        <h2 class="reveal d-2" style="font-size: var(--h3-size); font-weight: 500; color: var(--text-secondary);">
+            De Requisitos a Código: Transparência Técnica
+        </h2>
+        <div class="reveal d-3" style="width: 40px; height: 3px; background: var(--accent); margin: var(--content-gap) auto;"></div>
+        <p class="reveal d-4" style="font-size: var(--body-size); max-width: 700px; margin: 0 auto; color: var(--text-secondary);">
+            Um detalhamento completo de como cada regra de negócio do backlog foi traduzida para as tabelas do banco de dados e APIs do sistema.
+        </p>
+    </div>
+</section>
+
+<!-- 02: THE CHALLENGE -->
+<section class="slide">
+    <div class="slide-content container">
+        <h2 class="reveal" style="font-size: var(--h2-size); margin-bottom: var(--content-gap);">O Desafio do <span class="text-accent">Produto</span></h2>
+        <div class="feature-grid reveal d-1">
+            <div class="clean-card" style="border-top: 4px solid var(--bg-dark);">
+                <h3 style="font-size: var(--h3-size);">1. Flexibilidade (RH)</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">Criar modelos estruturados (Motorista, Diretor) com passos variáveis, sem que a equipe de TI precise programar uma tela nova para cada cargo. O sistema deve agir como um "motor de workflow" onde o próprio RH monta e publica as etapas de admissão dinamicamente.</p>
+            </div>
+            <div class="clean-card" style="border-top: 4px solid var(--accent);">
+                <h3 style="font-size: var(--h3-size);">2. Segregação (Adm)</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">Garantir segurança profunda e isolamento de dados. O Médico do Trabalho só pode visualizar laudos e exames, enquanto o RH acessa apenas contratos e documentos civis. Vazamentos aqui representam multas graves (LGPD), exigindo bloqueio direto no banco de dados.</p>
+            </div>
+            <div class="clean-card" style="border-top: 4px solid var(--accent-alt);">
+                <h3 style="font-size: var(--h3-size);">3. Rastreabilidade</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">Assegurar que toda mudança estrutural nas regras de admissão e toda rejeição de documento gere uma auditoria inalterável. Se um candidato for reprovado, a empresa precisa saber exatamente <i>quem</i> reprovou, <i>quando</i>, e qual foi a justificativa legal.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 03: METHODOLOGY -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">A Metodologia:<br><span class="text-alt">Vertical Slicing</span></h2>
+            <p class="reveal d-2" style="font-size: var(--body-size); color: var(--text-secondary);">
+                Não construímos "fatias horizontais" isoladas. Construímos fatias <strong>verticais</strong> onde cada regra de negócio atravessa todo o sistema até virar uma URL.
+            </p>
+        </div>
+        <div class="clean-card reveal d-3">
+            <h3 style="font-size: var(--h3-size); margin-bottom: 10px;">O Fluxo Base</h3>
+            <ul class="bullet-list">
+                <li><strong>Entidade:</strong> A tabela protegida e espelhada no banco relacional.</li>
+                <li><strong>Repository:</strong> Onde executamos as queries e buscas automatizadas.</li>
+                <li><strong>DTO:</strong> Filtro de segurança que impede vazamento de dados sensíveis para a internet.</li>
+                <li><strong>Service:</strong> O Cérebro. Onde os "ifs" de negócio e bloqueios residem.</li>
+                <li><strong>Controller:</strong> A rota final (API HTTP) consumida pelo front-end.</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- 04: PHASE 1 INTRO -->
+<section class="slide">
+    <div class="grid-lines"></div>
+    <div class="slide-content container" style="align-items: center; text-align: center;">
+        <div class="story-tag adm reveal">Fase 1</div>
+        <h2 class="reveal d-1" style="font-size: var(--title-size); margin-bottom: var(--element-gap);">O Alicerce:<br><span class="text-accent">Atores & Segurança</span></h2>
+        <p class="reveal d-2" style="font-size: var(--h3-size); color: var(--text-secondary); max-width: 600px;">
+            Tabelas vitais que dão vida ao sistema e blindam os acessos.
+        </p>
+    </div>
+</section>
+
+<!-- 05: ENUMS & ROLES -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <div class="reveal"><span class="story-tag adm">HSadm101</span><span class="story-tag adm">HSadm104</span></div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">Gestão de Papéis</h2>
+            <p class="reveal d-2" style="font-size: var(--body-size); color: var(--text-secondary);">
+                Para atender à rigorosa política de segurança de acessos, a fundação do sistema foi o <code>PerfilUsuarioEnum</code>.
+            </p>
+        </div>
+        <div class="clean-card reveal d-3">
+            <h3 style="font-size: var(--h3-size);">Implementação à prova de falhas</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                No banco de dados (H2/PostgreSQL), nós forçamos o mapeamento do Enum como uma <strong>String Literal</strong> explícita (ex: "RH", "MEDICINA"). <br><br>
+                Se salvássemos como números (0, 1, 2), uma simples reordenação no código poderia dar a um Médico o acesso completo de um Diretor. A abordagem em texto puro blinda o sistema contra acessos indevidos causados por falhas de manutenção futura.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 06: USUÁRIO ENTITY -->
+<section class="slide">
+    <div class="slide-content container">
+        <h2 class="reveal" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">A Entidade <span class="text-accent">Usuário</span></h2>
+        <div class="reveal d-1" style="margin-bottom: var(--content-gap);"><span class="story-tag cd">HScd314</span></div>
+
+        <div class="feature-grid">
+            <div class="clean-card reveal d-2">
+                <h3 style="font-size: var(--h3-size);">A Regra de Negócio</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                    <i>"O Contratado deverá ser identificado por uma chave única que dará acesso ao seu PASSAPORTE."</i><br><br>
+                    Como a chave viaja por e-mail ou WhatsApp, precisamos de garantia absoluta de que dois candidatos jamais recebam o mesmo token, evitando que um veja os dados bancários ou laudos do outro.
+                </p>
+            </div>
+            <div class="clean-card reveal d-3">
+                <h3 style="font-size: var(--h3-size);">Código Executado</h3>
+                <pre class="code-block">
+@Entity
+@Table(name = "tb_usuarios")
+public class Usuario {
+  @Id @GeneratedValue
+  private Long id;
+  
+  // Garantia estrutural de chave única!
+  @Column(unique = true, nullable = false)
+  private String chaveAcesso;
+}</pre>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 07: PHASE 2 INTRO -->
+<section class="slide">
+    <div class="grid-lines"></div>
+    <div class="slide-content container" style="align-items: center; text-align: center;">
+        <div class="story-tag rh reveal">Fase 2</div>
+        <h2 class="reveal d-1" style="font-size: var(--title-size); margin-bottom: var(--element-gap);">O Molde:<br><span class="text-accent">A Fábrica de Perfis</span></h2>
+        <p class="reveal d-2" style="font-size: var(--h3-size); color: var(--text-secondary); max-width: 600px;">
+            Como o RH desenha processos mutáveis sem criar caos nos dados estruturados.
+        </p>
+    </div>
+</section>
+
+<!-- 08: PERFIL PASSAPORTE -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <div class="reveal"><span class="story-tag rh">HSrh201</span><span class="story-tag rh">HSrh203</span></div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">O Cabeçalho:<br><span class="text-alt">Perfil</span></h2>
+            <p class="reveal d-2" style="font-size: var(--body-size); color: var(--text-secondary);">
+                A entidade <code>PerfilPassaporte</code> guarda o nome do workflow (ex: Motorista). Adicionamos a flag <code>ativo</code> para permitir que o RH suspenda contratações sem deletar dados.
+            </p>
+        </div>
+        <div class="clean-card reveal d-3">
+            <h3 style="font-size: var(--h3-size);">Desafio Central</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                A história <i>HSrh202</i> dita que: <i>"Após criado um Passaporte... a categoria não poderá mais ser alterada."</i><br><br>
+                Se o RH decidir que a vaga de Motorista agora exige um exame toxicológico adicional, como alteramos o modelo base sem corromper os processos dos 30 candidatos que já iniciaram o processo na semana passada com as regras antigas?
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 09: VERSIONAMENTO -->
+<section class="slide">
+    <div class="slide-content container">
+        <h2 class="reveal" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">A Solução: <span class="text-accent">Versionamento Base</span></h2>
+        <div class="reveal d-1" style="margin-bottom: var(--content-gap);"><span class="story-tag rh">HSrh202</span><span class="story-tag rh">HSrh207</span></div>
+
+        <div class="clean-card reveal d-2" style="border-left: 4px solid var(--accent);">
+            <p style="font-size: var(--body-size); color: var(--text-secondary);">
+                Para resolver o desafio arquitetural do histórico intocável, nós evitamos gambiarras no código e instituímos o atributo estrutural <strong><code>versão (Integer)</code></strong> diretamente dentro da entidade <code>PerfilPassaporte</code>.
+            </p>
+            <hr style="border-top: 1px solid var(--border-color); margin: 15px 0;">
+            <p style="font-size: var(--body-size); color: var(--text-secondary);">
+                Sempre que o RH edita uma regra (ex: altera prazos ou insere documentos novos), o sistema automaticamente "Desativa" o uso da versão atual (V1) e insere uma nova linha completa no banco com <code>Versão + 1</code> (V2). <br><br>
+                Assim, os novos candidatos entram na V2, mas os candidatos antigos continuam amarrados logicamente às regras da V1 no banco, preservando 100% da integridade da auditoria trabalhista.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 10: HIERARQUIA DE ATIVIDADES -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <div class="reveal"><span class="story-tag rh">HSrh204 a 206</span></div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">A Árvore de <span class="text-alt">Ações</span></h2>
+            <p class="reveal d-2" style="font-size: var(--body-size); color: var(--text-secondary);">
+                Mapeamento relacional forte (1-Para-Muitos).
+            </p>
+            <ul class="bullet-list reveal d-3" style="margin-top: 15px;">
+                <li><code>PerfilPassaporte</code> contém...</li>
+                <li style="margin-left: 20px;">↳ <code>AtividadeTemplate</code></li>
+                <li style="margin-left: 40px;">↳ <code>TarefaTemplate</code></li>
+                <li style="margin-left: 60px;">↳ <code>SubtarefaTemplate</code></li>
+            </ul>
+        </div>
+        <div class="clean-card reveal d-4">
+            <h3 style="font-size: var(--h3-size);">Ordenação Linear</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                Em ambientes de contratação, um passo frequentemente bloqueia o outro (só assina contrato após exame médico).<br><br>
+                Incluímos a coluna <code>ordem (Integer)</code> em todos os templates para assegurar matematicamente no banco que a execução das etapas no frontend ocorra no cronograma rígido delineado pelo RH, sem "furos" no processo.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 11: VINCULANDO PAPÉIS (MOLDE) -->
+<section class="slide">
+    <div class="slide-content container">
+        <h2 class="reveal" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">Delegação via <span class="text-accent">Papéis</span></h2>
+        <div class="reveal d-1" style="margin-bottom: var(--content-gap);"><span class="story-tag rh">HSrh209</span><span class="story-tag rh">HSrh211</span></div>
+
+        <div class="clean-card reveal d-2">
+            <p style="font-size: var(--body-size); color: var(--text-secondary);">
+                No momento da modelagem (quando o RH cria o Molde da vaga), todas as tabelas hierárquicas (Atividade, Tarefa) recebem obrigatoriamente a chave <code>perfilResponsavel</code>. <br><br>
+                Isso atua como um contrato irrevogável no banco: "A etapa de Exame Admissional <i>pertence única e exclusivamente</i> à categoria Medicina". É essa pequena coluna que dará poder à nossa camada de Serviço (Service) para impedir que um Analista de RH sequer consiga clicar no botão de validar um documento médico no futuro, atendendo em sua plenitude aos requisitos de segregação e privacidade.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 12: REUSO DE COMPONENTES -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <div class="reveal"><span class="story-tag rh">HSrh214</span></div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">Componentes<br><span class="text-alt">Reutilizáveis</span></h2>
+            <p class="reveal d-2" style="font-size: var(--body-size); color: var(--text-secondary);">
+                <i>"Desejo poder criar componentes reutilizáveis de elementos do Perfil."</i>
+            </p>
+        </div>
+        <div class="clean-card reveal d-3">
+            <h3 style="font-size: var(--h3-size);">Implementação Modular</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                A maior queixa de sistemas antigos de RH é ter que refazer todo o trabalho para cada cargo. <br><br>
+                Como desmembramos Atividades e Tarefas em tabelas distintas, com relacionamentos de chaves estrangeiras flexíveis, o <code>AtividadeService</code> consegue "clonar" blocos inteiros. O RH desenha a super atividade "Entrega de EPI e Regras de Segurança" apenas uma vez, e pode injetá-la como um módulo pronto nos perfis de Operador, Supervisor e Técnico instantaneamente.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 13: PHASE 3 INTRO -->
+<section class="slide">
+    <div class="grid-lines"></div>
+    <div class="slide-content container" style="align-items: center; text-align: center;">
+        <div class="story-tag rh reveal">Fase 3</div>
+        <h2 class="reveal d-1" style="font-size: var(--title-size); margin-bottom: var(--element-gap);">A Execução:<br><span class="text-accent">Workflow Ativo</span></h2>
+        <p class="reveal d-2" style="font-size: var(--h3-size); color: var(--text-secondary); max-width: 600px;">
+            Onde o Passaporte se torna uma entidade viva atrelada ao Candidato.
+        </p>
+    </div>
+</section>
+
+<!-- 14: PASSAPORTE REAL -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <div class="reveal"><span class="story-tag rh">HSrh301</span></div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">A Tabela <span class="text-alt">Passaporte</span></h2>
+            <p class="reveal d-2" style="font-size: var(--body-size); color: var(--text-secondary);">
+                O marco zero do processo admissional.
+            </p>
+        </div>
+        <div class="clean-card reveal d-3">
+            <h3 style="font-size: var(--h3-size);">A Triangulação Perfeita</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary); margin-bottom: 10px;">Esta tabela age como um nó conector entre três dimensões vitais do sistema:</p>
+            <ul class="bullet-list">
+                <li><code>candidato_id</code>: <strong>O Ator.</strong> Aponta para qual vida humana aquele processo pertence.</li>
+                <li><code>perfil_modelo_id</code>: <strong>A Regra.</strong> Aponta para qual versão exata do molde está regendo esta admissão.</li>
+                <li><code>dataCriacao</code>: <strong>O Relógio.</strong> O carimbo imutável que baseia toda a cobrança de SLAs e expiração de prazos (SLA).</li>
+            </ul>
+        </div>
+    </div>
+</section>
+
+<!-- 15: CÓPIA ISOLADA -->
+<section class="slide">
+    <div class="slide-content container">
+        <h2 class="reveal" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">A <span class="text-accent">Independência</span> da Ação</h2>
+
+        <div class="feature-grid">
+            <div class="clean-card reveal d-1">
+                <h3 style="font-size: var(--h3-size);">As Tabelas Reais</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                    No exato milissegundo que geramos o Passaporte, instanciamos cópias físicas e independentes nas tabelas de operação diária (<code>Atividade</code>, <code>Tarefa</code> e <code>Subtarefa</code>). Elas importam os textos e prazos dos seus templates, mas a partir dali, ganham vida própria, estado, e começam a responder de forma isolada às interações do candidato atual.
+                </p>
+            </div>
+            <div class="clean-card reveal d-2">
+                <h3 style="font-size: var(--h3-size);">A Delegação (HSrh302-304)</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                    Na execução, os responsáveis não são mais apenas "setores abstratos". Adicionamos o campo vital <code>responsavel_especifico_id</code> nas classes reais. Diferente do molde que pedia um "Perfil Medicina", a instância real permite que a coordenação atribua a triagem daquele RG diretamente para a caixa de entrada do funcionário específico (ex: "Dr. João").
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 16: MÁQUINA DE ESTADOS -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <div class="reveal"><span class="story-tag rh">HSrh312</span></div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">Máquina de <span class="text-alt">Estados</span></h2>
+            <p class="reveal d-2" style="font-size: var(--body-size); color: var(--text-secondary);">
+                O coração operacional de toda tarefa.
+            </p>
+            <pre class="code-block reveal d-3" style="margin-top: 15px;">
+public enum StatusFluxo {
+    ABERTA,
+    VALIDA,
+    INVALIDA,
+    CANCELADA
+}</pre>
+        </div>
+        <div class="clean-card reveal d-4">
+            <h3 style="font-size: var(--h3-size);">Blindagem no Service</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                Todas as entidades ativas do passaporte possuem a coluna <code>statusGeral</code> controlada rigorosamente por esse Enum.<br><br>
+                A mágica acontece na camada de negócio (O <code>TarefaService</code>), que atua como um "Gatekeeper". Nós implementamos travas via código impedindo mudanças de estado inválidas: um RH não consegue, sob hipótese alguma, forçar uma Atividade pai para o status "VÁLIDA" enquanto existirem Subtarefas obrigatórias filhas presas no status "ABERTA" ou "INVÁLIDA".
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 17: PHASE 4 INTRO -->
+<section class="slide">
+    <div class="grid-lines"></div>
+    <div class="slide-content container" style="align-items: center; text-align: center;">
+        <div class="story-tag cd reveal">Fase 4</div>
+        <h2 class="reveal d-1" style="font-size: var(--title-size); margin-bottom: var(--element-gap);">Arquivos:<br><span class="text-accent">Artefatos & Auditoria</span></h2>
+        <p class="reveal d-2" style="font-size: var(--h3-size); color: var(--text-secondary); max-width: 600px;">
+            A recepção física dos documentos, assinaturas lógicas e proteção legal.
+        </p>
+    </div>
+</section>
+
+<!-- 18: UPLOADS DE CANDIDATO -->
+<section class="slide">
+    <div class="slide-content container">
+        <h2 class="reveal" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">Uploads na Tabela <span class="text-accent">Artefato</span></h2>
+        <div class="reveal d-1" style="margin-bottom: var(--content-gap);">
+            <span class="story-tag cd">HScd315</span><span class="story-tag cd">HScd316</span>
+        </div>
+
+        <div class="clean-card reveal d-2" style="max-width: 900px;">
+            <h3 style="font-size: var(--h3-size); margin-bottom: 10px;">Integração e Bloqueio Definitivo</h3>
+            <p style="font-size: var(--body-size); color: var(--text-secondary);">
+                No ecossistema que construímos, não existem arquivos PDF flutuando soltos no banco ou num storage. Sempre que o candidato envia um laudo, a classe <code>Artefato</code> (que guarda o link para a AWS S3) é gerada e fortemente atrelada à <code>Tarefa</code> via Chave Estrangeira.
+            </p>
+            <br>
+            <p style="font-size: var(--body-size); color: var(--text-secondary);">
+                Essa união nos dá um superpoder arquitetural: antes de aceitar o upload, o endpoint consulta a tarefa pai. Se a tarefa estiver expirada ou "CANCELADA", a API recusa o pacote com erro HTTP 403, garantindo compliance total com as regras de prazo (SLA) definidas pela empresa.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 19: REUSO E ASSINATURA -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div class="clean-card reveal d-1">
+            <div style="margin-bottom: 5px;"><span class="story-tag rh">HSrh215</span><span class="story-tag cd">HScd320</span></div>
+            <h3 style="font-size: var(--h3-size);">Reuso de Base</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                Para evitar atritos no processo de onboarding, criamos a tabela auxiliar <code>CategoriaDocumento</code> que mapeia o prazo de validade de cada papel (Ex: RG é vitalício, CNH possui vencimento). <br><br>
+                Durante a execução do passaporte, o <code>ArtefatoService</code> faz uma varredura cruzada no histórico do candidato. Se um RG ainda válido já existir atrelado a ele no banco, o sistema faz o 'bypass' da etapa automaticamente. Isso poupa o tempo do candidato e reduz gigantescamente os custos da empresa com nuvem de armazenamento.
+            </p>
+        </div>
+
+        <div class="clean-card reveal d-2" style="border-left: 4px solid var(--accent);">
+            <div style="margin-bottom: 5px;"><span class="story-tag adm">Glossário</span></div>
+            <h3 style="font-size: var(--h3-size);">Assinatura Eletrônica</h3>
+            <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                O Artefato possui a coluna inviolável <code>tokenAssinatura</code>.<br><br>
+                Quando um aprovador (RH ou Médico) finaliza a verificação de um documento, nós não apenas mudamos o status no banco. O backend aplica um algoritmo que gera um Hash criptográfico imutável unindo o <strong>ID do Aprovador + Timestamp Unix + ID Físico do Artefato</strong>. Isso certifica legalmente a autoria daquela revisão para futuras auditorias empresariais.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 20: AUDITORIA DE INVALIDEZ -->
+<section class="slide">
+    <div class="slide-content container">
+        <h2 class="reveal" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">Auditoria de <span class="text-accent">Rejeição</span></h2>
+        <div class="reveal d-1" style="margin-bottom: var(--content-gap);"><span class="story-tag rh">HSrh311</span></div>
+
+        <div class="clean-card reveal d-2" style="border-top: 4px solid var(--accent);">
+            <h3 style="font-size: var(--h3-size);">A Tabela de Rastreio Incorruptível (LogStatus)</h3>
+            <p style="font-size: var(--body-size); color: var(--text-secondary);">
+                <i>"Validar ou invalidar um documento justificando o motivo".</i><br><br>
+                Nós blindamos o sistema contra "reescritas furtivas". Se um documento precisa ser rejeitado (ex: "Exame ilegível"), não nos contentamos em apenas alterar o status da Tarefa de volta para "INVÁLIDA".<br><br>
+                Na nossa arquitetura, essa mudança força um gatilho sistêmico que gera um <code>INSERT</code> irremovível na tabela apartada <code>LogStatus</code>, gravando indelevelmente: Qual Tarefa falhou, <strong>Qual Usuário</strong> fez a reprovação, a Data exata do carimbo, e a <strong>Justificativa textual</strong> obrigatória. Transparência legal de ponta a ponta.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- 21: INTELIGÊNCIA GERENCIAL -->
+<section class="slide">
+    <div class="slide-content container split-layout">
+        <div>
+            <h2 class="reveal d-1" style="font-size: var(--h2-size); margin-bottom: var(--element-gap);">Inteligência e<br><span class="text-alt">Visão Macro</span></h2>
+            <div class="reveal d-2" style="margin-bottom: var(--content-gap);">
+                <span class="story-tag rh">HSrh313</span><span class="story-tag rh">HSrh318</span>
+            </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="clean-card reveal d-3">
+                <h3 style="font-size: var(--h3-size);">HSrh313: Visão de Dashboard</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                    As entidades carregam relações pesadas no banco. Para o Dashboard gerencial funcionar sem travar, construímos <code>DTOs (Data Transfer Objects)</code> otimizados que "mastigam" o status das centenas de tarefas ativas e entregam ao Frontend um JSON enxuto. O painel apenas lê contadores absolutos e traduz Enums para símbolos visuais rápidos e eficientes.
+                </p>
+            </div>
+            <div class="clean-card reveal d-4">
+                <h3 style="font-size: var(--h3-size);">HSrh318: Alertas e Notificações</h3>
+                <p style="font-size: var(--small-size); color: var(--text-secondary);">
+                    O sistema não espera ser consultado, ele age. Implementamos rotinas autônomas (<code>@Scheduled Cron Jobs</code> no Spring Boot) que acordam toda madrugada, vasculham a tabela de Artefatos ativos cruzando-a com os prazos limites (SLAs), e inserem disparos na fila de notificação (Email/Sistema) sobre documentos que vão expirar em 48 horas.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 22: CONCLUSION -->
+<section class="slide">
+    <div class="slide-content container" style="align-items: center; text-align: center;">
+        <h2 class="reveal d-1" style="font-size: var(--title-size); max-width: 900px; margin-bottom: var(--element-gap);">
+            Arquitetura Orientada a <span class="text-accent">Negócio</span>.
+        </h2>
+        <p class="reveal d-2" style="font-size: var(--h3-size); color: var(--text-secondary); max-width: 700px; margin-bottom: var(--content-gap);">
+            O código não é uma arte solta. Cada classe construída existe puramente para garantir que as histórias de negócio ocorram com 100% de segurança.
+        </p>
+        <div class="reveal d-3" style="font-size: var(--small-size); color: var(--text-secondary); padding: 10px 20px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary);">
+            Flexibilidade &bull; Segregação Estrita &bull; Versionamento Blindado
+        </div>
+    </div>
+</section>
+
+<script>
+    /* ===========================================
+       SLIDE PRESENTATION CONTROLLER
+       =========================================== */
+    class SlidePresentation {
+        constructor() {
+            this.slides = document.querySelectorAll('.slide');
+            this.setupIntersectionObserver();
+            this.setupKeyboardNav();
+            this.setupNavDots();
+        }
+
+        setupIntersectionObserver() {
+            const options = { root: null, rootMargin: '0px', threshold: 0.5 };
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        const index = Array.from(this.slides).indexOf(entry.target);
+                        this.updateDotsAndProgress(index);
+                    }
+                });
+            }, options);
+            this.slides.forEach(slide => observer.observe(slide));
+        }
+
+        setupKeyboardNav() {
+            document.addEventListener('keydown', (e) => {
+                const activeSlide = this.getCurrentSlideIndex();
+                if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+                    e.preventDefault();
+                    this.goToSlide(activeSlide + 1);
+                } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+                    e.preventDefault();
+                    this.goToSlide(activeSlide - 1);
+                }
+            });
+        }
+
+        setupNavDots() {
+            const navDotsContainer = document.getElementById('navDots');
+            this.slides.forEach((_, index) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot' + (index === 0 ? ' active' : '');
+                dot.addEventListener('click', () => this.goToSlide(index));
+                navDotsContainer.appendChild(dot);
+            });
+        }
+
+        getCurrentSlideIndex() {
+            const scrollPos = window.scrollY;
+            const windowHeight = window.innerHeight;
+            return Math.round(scrollPos / windowHeight);
+        }
+
+        goToSlide(index) {
+            if (index >= 0 && index < this.slides.length) {
+                this.slides[index].scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        updateDotsAndProgress(activeIndex) {
+            const dots = document.querySelectorAll('.dot');
+            dots.forEach((dot, index) => {
+                if (index === activeIndex) dot.classList.add('active');
+                else dot.classList.remove('active');
+            });
+            const progress = (activeIndex / (this.slides.length - 1)) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        new SlidePresentation();
+    });
+</script>
+</body>
+</html>
+```
